@@ -2,27 +2,27 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from invoke_types import InvocationRequest, InvocationResponse
-from db import pool
+# from db import pool
 import json
 from settings import MODEL, MODEL_KEY
 from ai import respond_initial, critique, refine, check_whether_to_refine
 from datetime import datetime, timezone
 import time
 
-app = FastAPI()
+# app = FastAPI()
+# origins = ["*"]
 
-origins = [
-    "*"
-]
+# app.add_middleware(
+#     CORSMiddleware,
+#     allow_origins=origins,
+#     allow_credentials=True,
+#     allow_methods=["*"],
+#     allow_headers=["*"],
+# )
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=origins,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+from flask import Flask, request, jsonify
 
+app = Flask(__name__)
 
 def create_conversation_turn(conn, request: InvocationRequest) -> int:
     with conn.cursor() as cur:        
@@ -87,15 +87,26 @@ def prompt_ai(conn, request: InvocationRequest) -> InvocationResponse:
     return response
 
 
+@app.route("/", methods = ["GET"])
+def read_root():
+    return {"Hello": "World"}
+
+app = Flask(__name__)
+
+@app.route('/invoke', methods=['POST'])
+def post_endpoint():
+    print("Hello")
+    data = request.json  # Get JSON data from request body
+    response = prompt_ai(None, data)
+    return jsonify(response), 200  # Return JSON response with status code 200
+
+if __name__ == '__main__':
+    app.run(debug=True, port=10000)  # Run the app in debug mode
 
 @app.post("/invoke")
-async def invoke(request: InvocationRequest):
-    start_time = time.time()
-    with pool().connection() as conn:
-        conn_time = time.time()
-        print(f"Conn in {conn_time - start_time:.2f}s")
-        response = prompt_ai(conn, request)
-        response_time = time.time()
-        print(f"Response in {response_time - conn_time:.2f}s")
+def invoke(request: InvocationRequest):
+    print("Received request", flush=True)
+    conn = None
+    response = prompt_ai(conn, request)
 
-        return response.model_dump()
+    return response.model_dump()

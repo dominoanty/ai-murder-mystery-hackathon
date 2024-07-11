@@ -1,11 +1,23 @@
+import os
 import time
 from datetime import datetime, timezone
 from invoke_types import InvocationRequest, Actor, LLMMessage
-from settings import MODEL, MODEL_KEY, MAX_TOKENS
+from settings import MODEL, MODEL_KEY, MAX_TOKENS, OPENROUTER_API_KEY
 import json
-import anthropic
+from openai import OpenAI
+
 
 # NOTE: increment PROMPT_VERSION if you make ANY changes to these prompts
+
+client = OpenAI(
+ api_key = OPENROUTER_API_KEY,
+ base_url = "https://openrouter.ai/api/v1",
+ default_headers = {
+    "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+   "HTTP-Referer": "https://www.usemynt.com/",
+   "X-Title": "Mynt"
+ },
+)
 
 def get_actor_prompt(actor: Actor):
     return (f"You are {actor.name} talking to Detective Sheerluck. "
@@ -30,18 +42,20 @@ def invoke_ai(conn,
         start_time = datetime.now(tz=timezone.utc)
         serialized_messages = [msg.model_dump() for msg in messages]
 
-        anthropic_response = anthropic.Anthropic().messages.create(
+        response = client.chat.completions.create(
             model=MODEL,
-            system=system_prompt,
-            messages=serialized_messages,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                *serialized_messages  # Assuming serialized_messages is a list of dictionaries with 'role' and 'content'
+            ],
             max_tokens=MAX_TOKENS,
         )
 
-        input_tokens = anthropic_response.usage.input_tokens
-        output_tokens = anthropic_response.usage.output_tokens
-        total_tokens = input_tokens + output_tokens
+        input_tokens = response['usage']['prompt_tokens']
+        output_tokens = response['usage']['completion_tokens']
+        total_tokens = response['usage']['total_tokens']
 
-        text_response = anthropic_response.content[0].text
+        text_response = response['choices'][0]['message']['content']
 
         finish_time = datetime.now(tz=timezone.utc)
 
